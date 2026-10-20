@@ -1,14 +1,16 @@
 # 💸 YapeListener - Monitor de Transacciones en Tiempo Real
 
-Una aplicación Android que **escucha notificaciones de Yape** y registra automáticamente tus transacciones en **Firebase Realtime Database**.
-¡Sin intervención manual, sin registros manuales! Todo se sincroniza automáticamente para que lleves un control preciso de tus finanzas.
+Una aplicación Android que **escucha notificaciones de Yape** y envía cada ingreso a un **webhook HTTP** (n8n) como JSON.
+¡Sin intervención manual, sin registros manuales! El parser normaliza el monto y el código de seguridad, y el listener solo reenvía los ingresos.
 
 ---
 
 ![Kotlin](https://img.shields.io/badge/Language-Kotlin-purple)
 ![Android](https://img.shields.io/badge/Platform-Android-green)
-![Firebase](https://img.shields.io/badge/Backend-Firebase%20Realtime%20Database-orange)
+![Webhook](https://img.shields.io/badge/Backend-Webhook%20HTTP-orange)
 ![Jetpack Compose](https://img.shields.io/badge/UI-Jetpack%20Compose-blue)
+
+> Fork de [`adria9s/yape-listener-prueba`](https://github.com/adria9s/yape-listener-prueba), a su vez fork de [`Jozelom/yape-listener`](https://github.com/Jozelom/yape-listener), con el historial original de Pierre Juarez. Esta rama reemplaza Firebase por un webhook propio.
 
 ---
 
@@ -16,9 +18,10 @@ Una aplicación Android que **escucha notificaciones de Yape** y registra autom�
 
 - 📲 **Captura automática** de notificaciones de Yape.
 - 💰 **Extracción inteligente** de montos, nombres y tipo de transacción.
-- ⚡ **Sincronización en tiempo real** con Firebase Realtime Database.
+- 🔢 **Monto normalizado** a dos decimales y código de 3 dígitos conservado como texto.
+- ⚡ **Envío inmediato** por POST JSON al webhook configurado.
 - 🔐 **Identificación única** por dispositivo para múltiples usuarios.
-- 🎯 **Detección precisa** del tipo de transacción (Ingreso, Egreso, Pago, Retiro).
+- 🎯 **Solo ingresos**: las notificaciones que no son `INGRESO` se ignoran.
 - 🧹 **Procesamiento limpio** de nombres (solo primer nombre y primer apellido).
 - 🎨 **UI moderna** con Jetpack Compose y Material Design 3.
 - 🌗 **Tema claro y oscuro** adaptativo.
@@ -43,7 +46,7 @@ Una aplicación Android que **escucha notificaciones de Yape** y registra autom�
 
 - **Android 7.0 (API 24)** o superior
 - **Permisos de acceso a notificaciones** habilitados
-- **Cuenta de Firebase** con Realtime Database configurada
+- **Un webhook HTTP** que reciba el JSON (por ejemplo, un workflow de n8n)
 - **Android Studio Iguana** o superior (recomendado)
 
 ---
@@ -53,23 +56,26 @@ Una aplicación Android que **escucha notificaciones de Yape** y registra autom�
 ### 1. Clona el repositorio
 
 ```bash
-git clone https://github.com/pierre-juarez/yapelistener.git
+git clone https://github.com/adria9s/yape-listener-prueba.git
 ```
 
 ### 2. Entra al proyecto
 
 ```bash
-cd yapelistener
+cd yape-listener-prueba
 ```
 
-### 3. Configura Firebase
+### 3. Configura el webhook
 
-1. Ve a la [Consola de Firebase](https://console.firebase.google.com/)
-2. Crea un nuevo proyecto o selecciona uno existente
-3. Añade una aplicación Android con el package name: `dev.pierrejuarez.yapelistener` o cambia a uno existente
-4. Descarga el archivo `google-services.json`
-5. Coloca el archivo en la carpeta `app/`
-6. Habilita **Firebase Realtime Database** en tu proyecto
+Agrega la URL y el token a `local.properties` en la raíz del proyecto (ese archivo no se versiona):
+
+```properties
+webhook.url=http://192.168.1.10:5678/webhook/yape-listener
+webhook.token=tu_token_local
+```
+
+El build inyecta ambos valores en `BuildConfig` (`WEBHOOK_URL` y `WEBHOOK_TOKEN`).
+En debug se permite HTTP plano; el APK release exige HTTPS.
 
 ### 4. Sincroniza el proyecto
 
@@ -99,33 +105,32 @@ Conecta tu dispositivo Android o usa un emulador y ejecuta:
 
 1. **Instala y configura** la aplicación siguiendo los pasos anteriores
 2. **Abre la app** y activa el servicio desde el toggle principal
-3. **Recibe o envía un Yape** - La transacción se registrará automáticamente
-4. **Verifica en Firebase** - Los datos aparecerán en `transacciones_yape/`
+3. **Recibe un Yape** - El listener parsea la notificación y, si es `INGRESO`, hace POST al webhook
+4. **Verifica el webhook** - El evento llega como JSON con los ocho campos del payload
 
-### Estructura de datos en Firebase
+### Payload del webhook
 
-Cada transacción se almacena con el siguiente formato:
+Cada ingreso se envía como un objeto JSON plano:
 
 ```json
 {
-  "transacciones_yape": {
-    "push_id_generado": {
-      "id_envio": "uuid-generado",
-      "monto": "100.50",
-      "persona": "Juan Perez",
-      "tipo": "INGRESO",
-      "fecha": "26/10/2025 15:30:45",
-      "timestamp": 1730000000000,
-      "mensaje_completo": "Yape! Juan Perez te envió S/ 100.50",
-      "dispositivo_id": "android_id_del_dispositivo"
-    }
-  }
+  "id_envio": "uuid-generado",
+  "monto": "100.50",
+  "pagador": "Juan Perez",
+  "codigo_seguridad": "031",
+  "tipo": "INGRESO",
+  "timestamp": 1730000000000,
+  "mensaje_completo": "Yape! Juan Perez te envió un pago por S/ 100.50",
+  "dispositivo_id": "android_id_del_dispositivo"
 }
 ```
 
+`codigo_seguridad` viaja como texto para conservar ceros iniciales; si el pago llega
+por banca y no trae código, se envía como cadena vacía.
+
 ### Tipos de transacción detectados
 
-- **INGRESO**: Cuando recibes dinero
+- **INGRESO**: Cuando recibes dinero (único tipo que se envía al webhook)
 
 ---
 
@@ -135,7 +140,9 @@ Cada transacción se almacena con el siguiente formato:
 app/src/main/
 ├── java/dev/pierrejuarez/yapelistener/
 │   ├── MainActivity.kt                    # Actividad principal con UI
-│   ├── YapeNotificationListener.kt        # Servicio de escucha de notificaciones
+│   ├── YapeNotificationListener.kt        # Servicio: filtra Yape e ingresos
+│   ├── YapeParser.kt                      # Parser JVM: monto, pagador, código, tipo
+│   ├── WebhookSender.kt                   # POST JSON con HttpURLConnection
 │   └── ui/theme/                          # Tema y estilos de Compose
 │       ├── Color.kt
 │       ├── Theme.kt
@@ -147,12 +154,16 @@ app/src/main/
 
 ## 🔑 Permisos Requeridos
 
-El proyecto utiliza los siguientes permisos:
+El proyecto declara los permisos de red en el manifiesto:
 
 ```xml
-<uses-permission android:name="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE" />
 <uses-permission android:name="android.permission.INTERNET" />
+<uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 ```
+
+`BIND_NOTIFICATION_LISTENER_SERVICE` **no** es un `uses-permission`: se declara como
+atributo `android:permission` del servicio `YapeNotificationListener`, y el usuario lo
+concede desde Ajustes → Acceso a notificaciones.
 
 ---
 
@@ -163,7 +174,7 @@ El proyecto utiliza los siguientes permisos:
 | **Kotlin**               | Lenguaje principal                          |
 | **Jetpack Compose**      | UI moderna y declarativa                    |
 | **Material Design 3**    | Sistema de diseño                           |
-| **Firebase Realtime DB** | Base de datos en tiempo real                |
+| **Webhook HTTP**         | POST JSON con `HttpURLConnection`           |
 | **NotificationListener** | API de Android para escuchar notificaciones |
 | **SharedPreferences**    | Almacenamiento local de configuración       |
 
@@ -200,8 +211,8 @@ git push origin feature/nueva-caracteristica
 
 - Esta aplicación está diseñada **únicamente con fines educativos y de gestión personal**.
 - Respeta la privacidad y los términos de servicio de Yape.
-- Los datos se almacenan en tu propia base de datos de Firebase.
-- **No compartas tu archivo `google-services.json`** públicamente.
+- Los eventos se envían a tu propio webhook; no hay backend de terceros.
+- **No compartas tu `local.properties`**: contiene la URL y el token del webhook.
 
 ---
 
