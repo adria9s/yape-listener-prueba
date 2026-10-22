@@ -1,11 +1,17 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
-
-    // Add the Google services Gradle plugin
-    id("com.google.gms.google-services")
 }
+
+val localProps = Properties().apply {
+    val archivo = rootProject.file("local.properties")
+    if (archivo.exists()) archivo.inputStream().use { load(it) }
+}
+
+fun String.paraBuildConfig() = "\"" + replace("\\", "\\\\").replace("\"", "\\\"") + "\""
 
 android {
     namespace = "dev.pierrejuarez.yapelistener"
@@ -19,6 +25,9 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        buildConfigField("String", "WEBHOOK_URL", localProps.getProperty("webhook.url", "").paraBuildConfig())
+        buildConfigField("String", "WEBHOOK_TOKEN", localProps.getProperty("webhook.token", "").paraBuildConfig())
     }
 
     buildTypes {
@@ -39,14 +48,11 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 
 dependencies {
-    // Import the Firebase BoM FIRST
-    implementation(platform("com.google.firebase:firebase-bom:34.4.0"))
-
-
     // AndroidX dependencies
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
@@ -58,7 +64,6 @@ dependencies {
     implementation(libs.androidx.material3)
     implementation(libs.androidx.appcompat)
     implementation(libs.androidx.cardview)
-    implementation(libs.firebase.database)
 
     // Test dependencies
     testImplementation(libs.junit)
