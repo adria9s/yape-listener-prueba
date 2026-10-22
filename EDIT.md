@@ -9,7 +9,7 @@ Esto de aqui empieza el 16/08/26
 - HTTP plano permitido solo en debug (se quita en el Día 24).
 
 
-## 22/10/2026 — Día 15C
+## 21/10/2026 — Día 15C
 - `WorkManager 2.10.0`: cola persistente `EnvioPagoWorker` con espera creciente (30 s) y reintentos aunque el proceso muera.
 - `Reglas.kt` puro: `idEnvio` determinista (`postTime + mensaje`), ventana de reproceso de 6 h, vida máxima de 48 h y clasificación HTTP (2xx éxito, 400 descartar, resto reintentar).
 - Listener: reprocesa las notificaciones activas al reconectar y pide `requestRebind` al desconectarse; `onListenerConnected` arranca el latido.
@@ -17,4 +17,4 @@ Esto de aqui empieza el 16/08/26
 - n8n: workflow `Canelú - Latido Yape` (`1iglzMiD7pUf0xqX`) con `yape-latido` y `yape-latido-estado`; «Save successful production executions» en «Do not save».
 - Pruebas (a)(b)(c) verdes: reproceso con la app caída, 4 intentos con el webhook en 404 sobreviviendo a 3 muertes del proceso, y silencio detectado con umbral de 3 min.
 - Hallazgo: `am force-stop` solo no detiene la app (el sistema re-enlaza el listener); para simular muerte hay que `disallow_listener` + `force-stop`.
-- Hallazgo: el teléfono no tiene datos móviles; el reloj está 5 h atrasado.
+- Hallazgo: el teléfono no tiene datos móviles. El reloj de la PC (y de n8n, que corre en ella) estaba 5 h adelantado; el teléfono era el correcto.
