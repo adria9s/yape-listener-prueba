@@ -1,45 +1,39 @@
 package dev.pierrejuarez.yapelistener
 
-import android.util.Log
-import org.json.JSONObject
+import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
 
-/** Envía un evento de pago al webhook de n8n. Sin reintentos todavía (Día 15C). */
+/** POST JSON al webhook de n8n. Se llama desde un hilo de fondo (los workers). */
 object WebhookSender {
-    private const val TAG = "YapeListener"
+    fun urlPago(): String = BuildConfig.WEBHOOK_URL
 
-    fun enviar(payload: Map<String, Any>) {
-        val url = BuildConfig.WEBHOOK_URL
+    /** Mismo servidor y carpeta que el webhook de pagos, con el path `yape-latido`. */
+    fun urlLatido(): String = BuildConfig.WEBHOOK_URL.substringBeforeLast('/') + "/yape-latido"
+
+    /** Devuelve el código HTTP. Lanza IOException si falla la red o falta la configuración. */
+    @Throws(IOException::class)
+    fun postJson(url: String, cuerpoJson: String): Int {
         val token = BuildConfig.WEBHOOK_TOKEN
         if (url.isBlank() || token.isBlank()) {
-            Log.e(TAG, "❌ Webhook sin configurar (webhook.url / webhook.token en local.properties)")
-            return
+            throw IOException("Webhook sin configurar (webhook.url / webhook.token en local.properties)")
         }
-        Thread {
-            var conexion: HttpURLConnection? = null
-            try {
-                conexion = (URL(url).openConnection() as HttpURLConnection).apply {
-                    requestMethod = "POST"
-                    connectTimeout = 5_000
-                    readTimeout = 10_000
-                    doOutput = true
-                    setRequestProperty("Content-Type", "application/json; charset=utf-8")
-                    setRequestProperty("X-Canelu-Token", token)
-                }
-                val cuerpo = JSONObject(payload).toString().toByteArray(Charsets.UTF_8)
-                conexion.outputStream.use { it.write(cuerpo) }
-                val codigo = conexion.responseCode
-                if (codigo in 200..299) {
-                    Log.d(TAG, "✅ Evento enviado al webhook (HTTP $codigo) id=${payload["id_envio"]}")
-                } else {
-                    Log.e(TAG, "❌ El webhook respondió HTTP $codigo")
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "❌ Error al enviar: ${e.message}")
-            } finally {
-                conexion?.disconnect()
+        var conexion: HttpURLConnection? = null
+        try {
+            conexion = (URL(url).openConnection() as HttpURLConnection).apply {
+                requestMethod = "POST"
+                connectTimeout = 5_000
+                readTimeout = 10_000
+                doOutput = true
+                setRequestProperty("Content-Type", "application/json; charset=utf-8")
+                setRequestProperty("X-Canelu-Token", token)
             }
-        }.start()
+            conexion.outputStream.use { it.write(cuerpoJson.toByteArray(Charsets.UTF_8)) }
+            val codigo = conexion.responseCode
+            (if (codigo in 200..299) conexion.inputStream else conexion.errorStream)?.use { it.readBytes() }
+            return codigo
+        } finally {
+            conexion?.disconnect()
+        }
     }
 }

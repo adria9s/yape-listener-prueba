@@ -64,6 +64,7 @@ dependencies {
     implementation(libs.androidx.material3)
     implementation(libs.androidx.appcompat)
     implementation(libs.androidx.cardview)
+    implementation(libs.androidx.work.runtime)
 
     // Test dependencies
     testImplementation(libs.junit)
